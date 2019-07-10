@@ -9,14 +9,23 @@ router.use(express.json());
 router.post('/', (req, res) => {
   const { title, contents } = req.body; 
   if (!title || !contents) {
-    res.status(400).json({ errorMessage: 'Please provide title and contents for the post.'})
+    res.status(400).json({
+      success: false,
+      errorMessage: 'Please provide title and contents for the post.'
+    })
     } else {
       Actions.insert(req.body) 
       .then(result => {
-        res.status(201).json(result);
+        res.status(201).json({
+          success: true, 
+          post: req.body
+        });
       })
       .catch(error => {
-        res.status(500).json(error);
+        res.status(500).json({
+          success: false,
+          error: error
+        });
       })
   }
 })
@@ -24,15 +33,25 @@ router.post('/', (req, res) => {
 router.post('/:id/comments', (req, res) => {
   const comment = {'post_id': req.params.id, 'text': req.body.text}
   if (!req.body.text) {
-    res.status(400).json({ errorMessage: 'Please provide text for the comment.' });
+    res.status(400).json({
+      success: false,
+      errorMessage: 'Please provide text for the comment.'
+    });
   } else {
     Actions.insertComment(comment)
       .then(result => {
-        res.status(201).json(result);
+        comment.comment_id = result.id;
+        res.status(201).json({
+          success: true,
+          result: comment
+        });
       })
       .catch(error => {
         console.log(error)
-        res.status(500).json(error);
+        res.status(500).json({
+          success: false,
+          error: error
+        });
       });
   }
 })
@@ -40,101 +59,122 @@ router.post('/:id/comments', (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const posts = await Actions.find();
-    res.status(200).json(posts);
+    res.status(200).json({
+      success: true,
+      posts: posts
+    });
   } catch (error) {
-    // log error to database
     console.log(error);
     res.status(500).json({
-      error: 'The posts information could not be retrieved.',
+      success: false,
+      error: 'The posts information could not be retrieved.'
     });
   }
 });
 
 router.get('/:id', async (req, res) => {
-  console.log(`hit /:id with ${req.params.id}`);
   Actions.findById(req.params.id)
   .then(post => {
     if (post && post.length) {
-      res.status(200).json(post);
+      res.status(200).json({
+        success: true, 
+        post: post
+      });
     } else {
-      res.status(404).json({ message: 'The post with the specified ID does not exist.' });
+      res.status(404).json({
+        success: false,
+        message: 'The post with the specified ID does not exist.'
+      });
     }
   }) .catch(error => {
-    // log error to database
     console.log(error);
     res.status(500).json({
-      error: 'The post information could not be retrieved',
+      success: false,
+      error: 'The post information could not be retrieved'
     });
   })
 });
 
 router.get('/:id/comments', async (req, res) => {
-  console.log(`hit /:id with ${req.params.id}`);
   Actions.findPostComments(req.params.id)
   .then(comments => {
     if (comments && comments.length) {
-      res.status(200).json(comments);
+      res.status(200).json({
+        success: true,
+        comments: comments
+      });
     } else {
-      res.status(404).json({ message: 'The post with the specified ID does not exist.' });
+      res.status(404).json({
+        success: false,
+        message: 'The post with the specified ID does not exist.'
+      });
     }
   })
   .catch(error => {
     console.log(error);
     res.status(500).json({
+      success: false,
       error: 'The comments information could not be retrieved',
     });
   })
 });
 
 router.delete('/:id', async (req, res) => {
-  try {
-    const count = await Actions.remove(req.params.id);
-    if (count > 0) {
-      res.status(200).json({ message: 'The post has been deleted.' });
-    } else {
-      res.status(404).json({ message: 'The post with the specified ID does not exist.' });
+  Actions.findById(req.params.id)
+  .then(post => {
+    if (!post && !post.length) {
+      res.status(404).json({ 
+        success: false, 
+        message: 'The post with the specified ID does not exist.' 
+      });
+      return;
     }
-  } catch (error) {
-    // log error to database
-    console.log(error);
-    res.status(500).json({
-      message: 'The post could not be removed',
-    });
-  }
-});
+    Actions.remove(req.params.id)
+    .then(count => {
+      console.log(post, count)
+      res.status(200).json({ 
+        success: true, 
+        post: post, 
+        message: 'The post has been deleted.' 
+      });
+    }) .catch(error => {
+        console.log(error);
+        res.status(500).json({
+          success: false,
+          message: 'The post could not be removed',
+        });
+  })
+})
+})
 
 router.put('/:id', (req, res) => {
   const id = req.params.id;
   const post  = req.body;
 
   if (!req.body.title || !req.body.contents) {
-    res.status(400).json({ errorMessage: 'Please provide title and contents for the post.' });
+    res.status(400).json({
+      success: false,
+      errorMessage: 'Please provide title and contents for the post.'
+    });
   } else {
-    try{
-      const count = Actions.update(id, post);
-      console.log(count)
-
-      if (count.id > 0) {
-        res.status(200).json(count);
-      } else {
-        res.status(404).json({ message: 'The post with the specified ID does not exist.' });
-      }
+      Actions.update(id, post)
+      .then(count => {
+        if (count === 0) {
+          res.status(404).json({ 
+            success: false, 
+            message: 'The post with the specified ID does not exist.' 
+          });
+        }
+        res.status(200).json({
+          success: true, 
+          post: post
+        });
+      })
+      .catch(error => {
+        console.log(error)
+        res.status(500).json(error);
+      })
     }
-    catch (error) {
-      res.status(500).json(error);
-    }
-    
-    // .then(post => {
-    //   if (count > 0) {
-    //     res.status(200).json(post);
-    //   } else {
-    //     res.status(404).json({ message: 'The post with the specified ID does not exist.' });
-    //   }
-    // })
-
-  }
 })
 
-
 module.exports = router;
-
